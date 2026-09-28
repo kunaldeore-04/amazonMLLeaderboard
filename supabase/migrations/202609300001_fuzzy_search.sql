@@ -86,6 +86,7 @@ as $$
       * least(greatest(coalesce(p_page_size, 10), 1), 100)
   )
   select jsonb_build_object(
+    'search_version', 1,
     'total', (select count(*) from filtered),
     'items', coalesce(
       (
