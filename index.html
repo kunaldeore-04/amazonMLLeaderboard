@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unstop Leaderboard Explorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <div class="header-content">
+            <h1>🏆 Unstop Leaderboard</h1>
+            <p>Weekend Fun Project — Pure HTML, CSS & JS</p>
+        </div>
+        <div class="stats-box">
+            <span>Total Teams:</span>
+            <strong id="total-teams">0</strong>
+        </div>
+    </header>
+
+    <main>
+        <div class="controls">
+            <input type="text" id="search-input" placeholder="Search by team name, player, or college...">
+            <div class="counter">
+                Showing <span id="visible-count">0</span> teams
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Team Name</th>
+                        <th>Score</th>
+                        <th>Players & Organisations</th>
+                        <th>Finish Time</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard-body">
+                    <tr>
+                        <td colspan="5" class="loading">Loading teams...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
