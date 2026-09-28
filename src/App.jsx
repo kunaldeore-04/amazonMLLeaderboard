@@ -31,11 +31,42 @@ function formatFinishTime(value) {
   }).format(date);
 }
 
+function levenshteinDistance(first, second) {
+  let previous = Array.from({ length: second.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= first.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= second.length; column += 1) {
+      current[column] = Math.min(
+        current[column - 1] + 1,
+        previous[column] + 1,
+        previous[column - 1] + (first[row - 1] === second[column - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[second.length];
+}
+
+function matchesFuzzy(searchableText, queryText) {
+  const terms = queryText.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const words = searchableText.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return terms.every((term) => {
+    if (term.length < 4) return words.includes(term);
+    const maxDistance = Math.max(1, Math.floor(term.length * 0.22));
+    return words.some((word) => (
+      Math.abs(word.length - term.length) <= maxDistance
+      && levenshteinDistance(term, word) <= maxDistance
+    ));
+  });
+}
+
 function App() {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [entries, setEntries] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -87,7 +118,7 @@ function App() {
               entry.team_name,
               ...entry.players.flatMap((player) => [player.name, player.organisation]),
             ].filter(Boolean).join(' ').toLocaleLowerCase();
-            return searchable.includes(needle);
+            return !needle || searchable.includes(needle) || matchesFuzzy(searchable, search);
           });
           if (requestId !== latestRequest.current) return;
           const start = (page - 1) * pageSize;
@@ -113,10 +144,36 @@ function App() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const firstResult = total ? (page - 1) * pageSize + 1 : 0;
   const lastResult = Math.min(page * pageSize, total);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const searchSettled = normalizedQuery === search.toLocaleLowerCase();
+  const suggestions = searchSettled && !loading ? entries.slice(0, 5) : [];
+  const showSuggestions = searchFocused && Boolean(normalizedQuery) && searchSettled && !loading && !error;
 
   function updateQuery(value) {
     setQuery(value);
     setPage(1);
+    setActiveSuggestion(-1);
+  }
+
+  function chooseSuggestion(entry) {
+    updateQuery(entry.team_name || '');
+    setSearchFocused(false);
+  }
+
+  function handleSearchKeyDown(event) {
+    if (event.key === 'ArrowDown' && suggestions.length) {
+      event.preventDefault();
+      setActiveSuggestion((current) => Math.min(current + 1, suggestions.length - 1));
+    } else if (event.key === 'ArrowUp' && suggestions.length) {
+      event.preventDefault();
+      setActiveSuggestion((current) => Math.max(current - 1, 0));
+    } else if (event.key === 'Enter' && activeSuggestion >= 0 && suggestions[activeSuggestion]) {
+      event.preventDefault();
+      chooseSuggestion(suggestions[activeSuggestion]);
+    } else if (event.key === 'Escape') {
+      setSearchFocused(false);
+      setActiveSuggestion(-1);
+    }
   }
 
   return (
@@ -150,7 +207,7 @@ function App() {
           <div className="overview-stats">
             <div className="overview-stat"><span className="stat-label">TOTAL TEAMS</span><strong>{loading && !total ? '—' : total.toLocaleString('en-IN')}</strong></div>
             <div className="overview-stat"><span className="stat-label">SHOWING</span><strong>{loading && !entries.length ? '—' : <>{entries.length.toString().padStart(2, '0')} <small>/ {pageSize}</small></>}</strong></div>
-            <div className="overview-caption">A live view of the leaderboard.<br />Search teams, people, or institutions.</div>
+            <div className="overview-caption">A live view of the leaderboard.<br />Search by team, player, or institution — typos are okay.</div>
           </div>
         </section>
 
@@ -164,11 +221,44 @@ function App() {
           </div>
 
           <div className="table-tools">
-            <label className="search-box">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
-              <input value={query} onChange={(event) => updateQuery(event.target.value)} placeholder="Search team, player, or institution" aria-label="Search leaderboard" />
-              {query && <button className="clear-search" onClick={() => updateQuery('')} aria-label="Clear search">×</button>}
-            </label>
+            <div className="search-control">
+              <label className="search-box">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
+                <input
+                  value={query}
+                  onChange={(event) => updateQuery(event.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search teams, players, institutions…"
+                  aria-label="Search leaderboard"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={showSuggestions}
+                  aria-controls="search-suggestions"
+                  aria-activedescendant={activeSuggestion >= 0 ? `suggestion-${activeSuggestion}` : undefined}
+                />
+                {query && <button type="button" className="clear-search" onMouseDown={(event) => event.preventDefault()} onClick={() => updateQuery('')} aria-label="Clear search">×</button>}
+              </label>
+              {showSuggestions && <div className="search-suggestions" id="search-suggestions" role="listbox" aria-label="Search suggestions">
+                <div className="suggestions-heading" role="presentation">{suggestions.length ? 'QUICK MATCHES' : 'NO CLOSE MATCHES'} <span>{suggestions.length ? `${suggestions.length} OF ${total.toLocaleString('en-IN')} TEAMS` : 'TRY ANOTHER SPELLING'}</span></div>
+                {suggestions.map((entry, index) => <button
+                  type="button"
+                  className={`suggestion-option ${activeSuggestion === index ? 'suggestion-active' : ''}`}
+                  id={`suggestion-${index}`}
+                  role="option"
+                  aria-selected={activeSuggestion === index}
+                  key={entry.id ?? `${entry.rank}-${index}`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => chooseSuggestion(entry)}
+                >
+                  <span className="suggestion-rank">{String(entry.rank).padStart(2, '0')}</span>
+                  <span className="suggestion-copy"><strong>{entry.team_name || 'Unknown team'}</strong><small>TEAM MATCH · RANK {entry.rank}</small></span>
+                  <span className="suggestion-score">{formatScore(entry.score)}<small>PTS</small></span>
+                </button>)}
+                {suggestions.length > 0 && <div className="suggestions-footnote" role="presentation">↑ ↓ TO NAVIGATE <span>ENTER TO SELECT</span></div>}
+              </div>}
+            </div>
             <div className="results-count">{loading ? 'UPDATING…' : `${total.toLocaleString('en-IN')} RESULTS`}</div>
           </div>
 

@@ -1,6 +1,6 @@
 # Rankroom
 
-An Unstop competition leaderboard built with React and Vite, with server-side search and pagination through Supabase. The current JSON export contains 10,942 entries.
+An Unstop competition leaderboard built with React and Vite, with typo-tolerant search, keyboard-accessible suggestions, and server-side pagination through Supabase. The current JSON export contains 10,942 entries.
 
 ## Run locally
 
@@ -9,6 +9,8 @@ An Unstop competition leaderboard built with React and Vite, with server-side se
 3. Apply `supabase/migrations/202609290001_leaderboard.sql` in the Supabase SQL Editor.
 4. Import the dataset with `npm run import:leaderboard`.
 5. Start the app with `npm run dev`.
+
+For an existing Supabase project, apply each newer SQL file in `supabase/migrations/` in order. The fuzzy-search migration installs `pg_trgm` and updates the paginated search RPC.
 
 For local UI work before creating a Supabase project, leave the environment values unset and run `npm run dev`. Vite uses the bundled JSON as a development-only fallback; the deployed app requires Supabase configuration.
 
